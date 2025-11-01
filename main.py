@@ -2,6 +2,7 @@ import chess
 import random
 import requests
 import sys
+from engine import engine_move
 
 def gameplay_loop():
         board = chess.Board()
@@ -9,23 +10,19 @@ def gameplay_loop():
 
         pretty_print_board(board)
     
-        while True:
+        while not board.is_game_over():
             move = perform_player_move(board)
             board.push(move)
             pretty_print_board(board)
-
-            if board.is_game_over():
-                announce_results(board)
-                break
 
             # DANYA'S TURN
             move = engine_move(board)
             print(f"danya played {board.san(move)}.")
             board.push(move)
             pretty_print_board(board)
-            if board.is_game_over():
-                announce_results(board)
-                break
+
+        announce_results(board)
+        return True
 
 def pretty_print_board(ascii_board):
     ascii_board = str(ascii_board)
@@ -40,30 +37,16 @@ def pretty_print_board(ascii_board):
         ascii_board = ascii_board.replace(letter, emoji)
 
     print(ascii_board)
-
-
-def engine_move(board):
-    # Random move
-    # move = random.choice(list(board.legal_moves))
-    # return move
-
-    # Play Stockfish's best move
-    print("danya's move. danya's thinking...")
-    ENDPOINT = "https://stockfish.online/api/s/v2.php"
-    data = {
-        "depth" : 10,
-        "fen" : board.fen()
-    }
-    response = requests.get(ENDPOINT, params=data).json()
-    print("danya has his move...")
-    bestmove = response['bestmove']
-    print(bestmove)
     
-    # Parse stockfish response, format: "bestmove [move1move2] ponder [move1move2]"
-    next_moves = bestmove.split(' ')[1]
-    move = board.parse_uci(next_moves)
-   
-    return move
+def announce_results(board):
+    print("Game is over.")
+    if board.result() == "1-0":
+        print("You win!")
+    elif board.result() == "0-1":
+        print("danya wins!")
+    else:
+        print("Draw!")
+
 
 def perform_player_move(board):
     print("Your turn.")
@@ -83,17 +66,6 @@ def perform_player_move(board):
     
     print(f"You played {user_move}.")
     return move
-    
-def announce_results(board):
-    print("Game is over.")
-    if board.result() == "1-0":
-        print("You win!")
-    elif board.result() == "0-1":
-        print("Morph-e wins!")
-    else:
-        print("Draw!")
-
-
 
 
 if __name__ == "__main__":
