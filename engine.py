@@ -3,12 +3,15 @@ import requests
 import sys
 import time
 
-WHITE = True
-BLACK = False
-
 # Player set to white, engine to black for now
-PLAYER_COLOR = WHITE
-ENGINE_COLOR = BLACK
+PLAYER_COLOR = chess.WHITE
+ENGINE_COLOR = chess.BLACK
+
+class Move_Review:
+    self.eval = 0
+    self.mate = False
+    self.attacks = 0
+    self.attacked_value = 0
 
 def engine_move(board):
 
@@ -64,6 +67,12 @@ def ANNA(board):
     pass #TODO
     return True
 
+def is_hanging(attackers) -> bool:
+    # Check the attackers of the square
+    # Check if any of them are of the PLAYER_COLOR
+    # Return True if they aren't, false if they are
+
+    return True
 
 def analyse_attacks(board, move):
     value_map = {
@@ -82,16 +91,19 @@ def analyse_attacks(board, move):
     hanging_pieces = ()
     for square in chess.SQUARES:
         piece = test_board.piece_at(square)
+        if not piece:
+            continue
         piece_str = str(piece)
         piece_str = piece_str.lower()
         if test_board.color_at(square) != ENGINE_COLOR:
-            attackers = test_board.attackers(ENGINE_COLOR, square)
+            continue
+        attackers = test_board.attackers(ENGINE_COLOR, square)
 
-            attack_count = len(attackers)
-            total_attacks += attack_count
-            
-            if attack_count > 0 and piece:
-                total_attacked_value  += value_map[piece_str]
+        attack_count = len(attackers)
+        total_attacks += attack_count
+        
+        if attack_count > 0 and piece:
+            total_attacked_value  += value_map[piece_str]
 
     return total_attacks, total_attacked_value
 
