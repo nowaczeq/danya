@@ -10,17 +10,23 @@ def get_black_move(board):
 class ChessGUI:
     def __init__(self, master):
         self.master = master
-        self.master.title("Chess — You (White) vs. Auto (Black)")
+        self.master.title("Chess — You (White) vs. danya (Black)")
 
         self.board = chess.Board()
         self.selected_square = None
 
-        self.canvas = tk.Canvas(master, width=480, height=480)
+        self.square_size = 60
+        board_pixels = 8 * self.square_size
+
+        # Add margin space for rank/file labels
+        self.margin = 20
+        total_size = board_pixels + self.margin
+
+        self.canvas = tk.Canvas(master, width=total_size, height=total_size)
         self.canvas.pack()
 
         self.canvas.bind("<Button-1>", self.on_click)
 
-        self.square_size = 60
         self.draw_board()
 
     def draw_board(self):
@@ -35,7 +41,9 @@ class ChessGUI:
 
                 # Board colors
                 color = "#EEEED2" if (rank + file) % 2 == 0 else "#769656"
-                self.canvas.create_rectangle(x1, y1, x2, y2, fill=color, outline=color)
+                self.canvas.create_rectangle(
+                    x1, y1, x2, y2, fill=color, outline=color
+                )
 
                 # Draw pieces
                 square = chess.square(file, rank)
@@ -47,6 +55,20 @@ class ChessGUI:
                         text=self.piece_unicode(piece),
                         font=("Arial", 36),
                     )
+
+        # Draw file letters (a–h)
+        for file in range(8):
+            file_letter = chr(ord("a") + file)
+            x = file * self.square_size + self.square_size / 2
+            y = 8 * self.square_size + self.margin / 2
+            self.canvas.create_text(x, y, text=file_letter, font=("Arial", 12))
+
+        # Draw rank numbers (1–8)
+        for rank in range(8):
+            rank_number = str(rank + 1)
+            x = 8 * self.square_size + self.margin / 2
+            y = (7 - rank) * self.square_size + self.square_size / 2
+            self.canvas.create_text(x, y, text=rank_number, font=("Arial", 12))
 
         # Highlight selected square
         if self.selected_square is not None:
@@ -68,6 +90,10 @@ class ChessGUI:
     def on_click(self, event):
         if self.board.turn == chess.BLACK:
             return  # disable user input when it's Black's turn
+
+        # Ignore clicks outside the 8x8 grid
+        if event.x > 8 * self.square_size or event.y > 8 * self.square_size:
+            return
 
         file = event.x // self.square_size
         rank = 7 - (event.y // self.square_size)
