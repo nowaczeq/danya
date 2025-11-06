@@ -3,7 +3,7 @@ import random
 import requests
 import sys
 from engine import engine_move
-
+ 
 def gameplay_loop():
         board = chess.Board()
         print("Welcome to danya. The engine currently makes best moves according to Stockfish 10. You are playing white.")

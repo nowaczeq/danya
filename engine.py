@@ -3,7 +3,7 @@ import requests
 import sys
 import time
 import random
-from tactics import is_hanging, is_underdefended
+from tactics import is_hanging
 
 # Player set to white, engine to black for now
 PLAYER_COLOR = chess.WHITE
@@ -14,35 +14,44 @@ class Move_Review:
         self.eval = 0
         self.mate = False
         self.hangs = False
-        self.is_capture = True
+        self.is_capture = False
+        self.mobility = 0
         self.attacks = 0
+        self.material_imbalance = 0
         self.attacked_value = 0
+        self.black_value = 0
+        self.white_value = 0
+        self.openness = 0
+        self.style = 0
         self.score = 0.0
+
     def calculate_review(self):
-        EVAL_BLACK_MODIFIER = 1
-        EVAL_WHITE_MODIFIER = 1
-        ATTACK_MODIFIER = 1
-        ATTACK_VALUE_MODIFIER = 1
-        MATE_MODIFIER = 1
-        
-        # Swap sign to account negative evaluation being in Black favor
-        if ENGINE_COLOR == chess.BLACK:
-            self.score -= (self.eval * EVAL_BLACK_MODIFIER)
-        else:
-            self.score += (self.eval * EVAL_WHITE_MODIFIER)
-        if self.mate:
-            self.score += MATE_MODIFIER
-        
+        STYLE_MODIFIER = 0.5
         if self.hangs:
             self.score = float('-inf')
             return
+
+        if ENGINE_COLOR == chess.BLACK:
+            self.material_imbalance += abs(self.black_value - self.white_value)
+        else:
+            self.material_imbalance += abs(self.white_value - self.black_value)
+
+        self.style = (
+            0.5 * self.material_imbalance +
+            0.3 * self.mobility +
+            0.5 * self.attacks + 
+            0.5 * self.attacked_value +
+            0.5 * self.openness 
+        )
+
+        if self.mate: self.style += 1
+        if self.is_capture: self.style += 1
+               
+        # Swap sign to account negative evaluation being in Black favor
+        if ENGINE_COLOR == chess.BLACK:
+            self.eval = -(self.eval)
         
-        if self.is_capture:
-            self.score += 50.0
-        
-        self.score += (self.attacks * ATTACK_MODIFIER)
-        self.score += (self.attacked_value * ATTACK_VALUE_MODIFIER)
-        self.score *= (random.randrange(9, 11) / 10)
+        self.score = self.eval + (self.style * STYLE_MODIFIER)
 
 def engine_move(board):
 
@@ -65,11 +74,14 @@ def MAIA(board):
         if review.hangs:
             print(f"{move_str} disqualified for hanging a piece")
             continue
-        review.is_capture = board.is_capture(c)
+        values = calculate_total_value(board, c)
+        review.white_value = values["white"]
+        review.black_value = values["black"]
         ENDPOINT = "https://stockfish.online/api/s/v2.php"
         review.eval, review.mate = get_eval_and_mate(board, c, ENDPOINT)
         print(f"{i + 1}/{len_moves}: evaluation and forced mate calculated in ", time.time() - start)
-        review.attacks, review.attacked_value = analyse_attacks(board, c)
+        print(f"{move_str} evaluated at {review.eval} ")
+        review.attacks, review.attacked_value, review.mobility, review.openness = analyse_attacks_and_mobility(board, c)
         if review.attacked_value == float('inf') and board.piece_at(c.to_square):
             print("Found a move that attacks a hanging piece: ", move_str)
             return move_str
@@ -93,16 +105,16 @@ def ANNA(board):
     return True
 
 
-def analyse_attacks(board, move):
+def analyse_attacks_and_mobility(board, move):
 
     total_attacks = 0
     total_attacked_value = 0
 
-    if is_hanging(board, move.to_square, PLAYER_COLOR):
+    if is_hanging(board, move.to_square, PLAYER_COLOR) and board.is_capture(move):
         # Prioritise capturing hanging pieces
         total_attacked_value += float('inf')
         total_attacks += 1
-        return total_attacks, total_attacked_value
+        return total_attacks, total_attacked_value, 0, 0
     
     value_map = {
         "p": 1,
@@ -114,6 +126,11 @@ def analyse_attacks(board, move):
     }
     test_board = board.copy()
     test_board.push(move)
+
+    # Mobility defined as the number of legal moves
+    # Openness defined as the absence of pawns
+    mobility = test_board.legal_moves.count()
+    openness = 16 - len([p for p in test_board.piece_map().values() if p.piece_type == chess.PAWN])
 
     for square in chess.SQUARES:
         piece = test_board.piece_at(square)
@@ -131,14 +148,14 @@ def analyse_attacks(board, move):
         if attack_count > 0 and piece:
             total_attacked_value  += value_map[piece_str]
 
-    return total_attacks, total_attacked_value
+    return total_attacks, total_attacked_value, mobility, openness
 
 def get_eval_and_mate(board, move, endpoint: str):
     test_board = board.copy()
     test_board.push(move)
     data = {
         "depth" : 10,
-        "fen" : board.fen()
+        "fen" : test_board.fen()
     }
     response = requests.get(endpoint, params = data).json()
     if not response['success']:
@@ -151,6 +168,30 @@ def get_eval_and_mate(board, move, endpoint: str):
         return int(eval), mate
     else:
         return 0, mate
+    
+
+def calculate_total_value(board, move):
+    test_board = board.copy()
+    test_board.push(move)
+    value_map = {
+        "p": 1,
+        "n": 3,
+        "b": 3.5,
+        "r": 5,
+        "q": 9,
+        "k": 0
+    }
+    output = {}
+    output["white"] = 0
+    output["black"] = 0
+    for s in chess.SQUARES:
+        piece = test_board.piece_at(s)
+        if piece and piece.color == chess.BLACK:
+            output["black"] += value_map[str(piece).lower()]
+        elif piece and piece.color == chess.WHITE:
+            output["white"] += value_map[str(piece).lower()]
+    
+    return output
 
 if __name__ == "__main__":
     board = chess.Board()
