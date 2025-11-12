@@ -12,7 +12,6 @@ ENGINE_COLOR = chess.BLACK
 class Move_Review:
     def __init__(self):
         self.eval = 0
-        self.mate = False
         self.hangs = False
         self.is_capture = False
         self.mobility = 0
@@ -68,7 +67,7 @@ def MAIA(board):
     len_moves = len(candidate_moves)
 
     ENDPOINT = "https://stockfish.online/api/s/v2.php"
-    initial_eval = get_eval_and_mate(board, None, ENDPOINT)
+    initial_eval = get_eval_and_mate(board, None, ENDPOINT, None)
     print("Stockfish initial analysis ", initial_eval[0])
 
     for i, c in enumerate(candidate_moves):
@@ -76,7 +75,8 @@ def MAIA(board):
         review = Move_Review()
 
         review.hangs = is_hanging(board, c.to_square, ENGINE_COLOR)
-        review.eval, review.mate = get_eval_and_mate(board, c, endpoint=ENDPOINT)
+        review.eval, bestmove = get_eval_and_mate(board, c, endpoint=ENDPOINT, bestmove=initial_eval[1])
+
         # Immediately disqualify moves that worsen the position
         # EVAL_MARGIN is the margin of allowed variance from the initial evaluation
         EVAL_MARGIN = 2
@@ -161,40 +161,55 @@ def analyse_attacks_and_mobility(board, move, review: Move_Review):
 
     return review
 
-def get_eval_and_mate(board, move, endpoint: str):
+def get_eval_and_mate(board, move, endpoint: str, bestmove=None):
     test_board = board.copy()
     if move != None:
         test_board.push(move)
+
+    # Initialise eval to -inf to assume the move is dogshit
+    eval = float("-inf")
+
     data = {
         "depth" : 10,
         "fen" : test_board.fen()
     }
     while True:
-        response = requests.get(endpoint, params = data).json()
-        if not response['success']:
-            print("Evaluation encountered an error. Retrying...")
-        else:
-            break
+        try:
+            response = requests.get(endpoint, params = data).json()
+            if not response['success']:
+                print("Evaluation encountered an error. Retrying...")
+            else:
+                break
+        except Exception as e:
+            print(f"Exception encountered: {e}. Retrying...")
+
     if response["mate"]:
         # Check who is checkmating
         engine_checkmating = (int(response["mate"]) > 0 and ENGINE_COLOR == chess.WHITE) or (int(response["mate"]) < 0 and ENGINE_COLOR == chess.BLACK)
-        if engine_checkmating:
-            # Account for lack of evaluation during forced mates
-            eval = float("inf")
-            return eval, True
-        else:
+        # Bestmove clause eliminates this if statement from firing on initial evaluations
+        if engine_checkmating and bestmove:
+            if move.uci() == bestmove:
+                # Account for lack of evaluation during forced mates
+                eval = float("inf")
+                return eval, None
+            else:
+                # Means there is a move that is checkmating, but this is not it
+                # Return -inf to allow engine to perform the best checkmating move
+                eval = float("-inf")
+                return eval, None
+        if not engine_checkmating:
             # TODO: Configure resigning if all moves lead to being checkmated
             eval = float("-inf")
-            return eval, True
+            return eval, None
     else:
         eval = int(response['evaluation'])
-    mate = response['mate']
+        # Swap sign to account negative evaluation being in Black favor
+        if ENGINE_COLOR == chess.BLACK:
+            eval *= -1.0
+    bestmove_response = response['bestmove']
+    bestmove = bestmove_response.split(' ')[1]
 
-    # Swap sign to account negative evaluation being in Black favor
-    if ENGINE_COLOR == chess.BLACK:
-        eval *= -1.0
-
-    return eval, mate
+    return eval, bestmove
     
 
 def calculate_total_value(board, move):
