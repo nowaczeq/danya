@@ -1,0 +1,1 @@
+<bound method Board.fen of Board('1rbqkbnr/pppp3p/2n1p3/6BQ/3PN3/8/PPP2PPP/R3KBNR b KQk - 2 8')>@1-0

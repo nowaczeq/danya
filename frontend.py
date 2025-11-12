@@ -10,7 +10,7 @@ def get_black_move(board):
 class ChessGUI:
     def __init__(self, master):
         self.master = master
-        self.master.title("Chess — You (White) vs. danya (Black)")
+        self.master.title("danya 1.0")
 
         self.board = chess.Board()
         self.selected_square = None
@@ -112,8 +112,16 @@ class ChessGUI:
                 self.selected_square = None
                 self.draw_board()
 
-                if not self.board.is_game_over():
-                    self.master.after(500, self.make_black_move)
+                # ✅ NEW: Check if the game ended after White's move
+                if self.board.is_game_over():
+                    result = self.board.result()
+                    messagebox.showinfo("Game Over", f"Game Over! Result: {result}")
+                    with open("fen.txt", "w") as txt:
+                        txt.write(f"{self.board.fen}@{self.board.result()}\n")
+                    return
+
+                # Let Black move after a short delay
+                self.master.after(500, self.make_black_move)
             else:
                 self.selected_square = None
 
